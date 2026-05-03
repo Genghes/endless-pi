@@ -67,21 +67,36 @@
   <script src="https://sdk.minepi.com/pi-sdk.js"></script>
   <!-- Initialize SDK using sandbox flag injected by server -->
   <script>
-    // Debug helper - visible on screen when ?debug in URL
+    // Debug helper - persists across redirects/reloads.
+    // Enable with ?debug=1, disable with ?debug=0.
     (function() {
       var el = document.getElementById('pi-debug');
-      var show = location.search.indexOf('debug') !== -1;
-      if (show) el.classList.add('visible');
+      var q = new URLSearchParams(location.search);
+      if (q.get('debug') === '1') {
+        localStorage.setItem('pi_debug', '1');
+      }
+      if (q.get('debug') === '0') {
+        localStorage.removeItem('pi_debug');
+      }
+
+      var show = localStorage.getItem('pi_debug') === '1';
+      if (show) {
+        el.classList.add('visible');
+      }
+
       window.__piLog = function(msg) {
-        var t = new Date().toISOString().substr(11,12);
+        var t = new Date().toISOString().substr(11, 12);
         console.log('[PiDebug] ' + msg);
-        if (show) el.innerHTML += t + ' ' + msg + '<br>';
+        if (show) {
+          el.innerHTML += t + ' ' + msg + '<br>';
+        }
       };
     })();
 
     window.__piLog('Pi SDK loaded: ' + (typeof Pi !== 'undefined'));
     window.__piLog('sandbox flag: ' + window.__piSandbox);
     window.__piLog('UA: ' + navigator.userAgent.substr(0, 80));
+    window.__piLog('URL: ' + location.href);
 
     if (typeof Pi !== 'undefined') {
       try {
