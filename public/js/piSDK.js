@@ -14,8 +14,12 @@ class PiSDKWrapper {
   //  Init
   // ----------------------------------------------------------
   init() {
-    if (typeof window.Pi === 'undefined') {
-      console.warn('[PiSDK] Pi SDK not loaded – running in demo mode.');
+    // Pi Browser injects its own SDK and has 'PiBrowser' in the user agent
+    this.inPiBrowser = /PiBrowser/i.test(window.navigator.userAgent);
+    console.log('[PiSDK] In Pi Browser:', this.inPiBrowser);
+
+    if (!this.inPiBrowser || typeof window.Pi === 'undefined') {
+      console.warn('[PiSDK] Not in Pi Browser – running in demo mode.');
       this.isDemoMode     = true;
       this.isInitialized  = false;
       return false;
@@ -37,9 +41,9 @@ class PiSDKWrapper {
 
     const scopes = ['username', 'payments'];
 
-    // If Pi.authenticate() doesn't respond within 6s we're not in Pi Browser
+    // Safety-net timeout – 20s gives Pi Browser plenty of time on slow connections
     const timeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Pi Browser not detected')), 6000)
+      setTimeout(() => reject(new Error('Pi authentication timed out')), 20000)
     );
 
     return Promise.race([
