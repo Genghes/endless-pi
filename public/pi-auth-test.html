@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pi Auth Test</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #eee;
+      padding: 16px;
+    }
+    h1 { margin-top: 0; }
+    button {
+      font-size: 16px;
+      padding: 10px 14px;
+      margin-right: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    #log {
+      margin-top: 12px;
+      border: 1px solid #444;
+      background: #000;
+      color: #0f0;
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      padding: 10px;
+      min-height: 200px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Pi Auth Test</h1>
+  <p>This page runs only minimal Pi SDK auth flow.</p>
+
+  <button id="btn-init">Init SDK</button>
+  <button id="btn-auth-username">Auth username</button>
+  <button id="btn-auth-payments">Auth username+payments</button>
+
+  <div id="log"></div>
+
+  <script src="/js/runtime-config.js"></script>
+  <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+  <script>
+    const logEl = document.getElementById('log');
+    function log(msg) {
+      const t = new Date().toISOString().slice(11, 23);
+      const line = t + ' ' + msg;
+      console.log('[PiAuthTest]', line);
+      logEl.textContent += line + '\n';
+    }
+
+    function errDetails(err) {
+      if (!err) return 'Unknown error';
+      if (typeof err === 'string') return err;
+      const parts = [];
+      if (err.message) parts.push('message=' + err.message);
+      if (err.code) parts.push('code=' + err.code);
+      if (err.type) parts.push('type=' + err.type);
+      if (err.error) parts.push('error=' + JSON.stringify(err.error));
+      parts.push('keys=' + Object.keys(err).join(','));
+      return parts.join(' | ');
+    }
+
+    async function initPi() {
+      log('URL=' + location.href);
+      log('Pi loaded=' + (typeof window.Pi !== 'undefined'));
+      log('sandbox=' + !!window.__piSandbox);
+      if (typeof window.Pi === 'undefined') {
+        log('Pi is undefined');
+        return;
+      }
+
+      try {
+        const initRes = window.Pi.init({ version: '2.0', sandbox: !!window.__piSandbox });
+        if (initRes && typeof initRes.then === 'function') {
+          await initRes;
+        }
+        log('Pi.init OK');
+
+        if (typeof window.Pi.nativeFeaturesList === 'function') {
+          try {
+            const features = await window.Pi.nativeFeaturesList();
+            log('nativeFeatures=' + JSON.stringify(features));
+          } catch (e) {
+            log('nativeFeatures ERROR: ' + errDetails(e));
+          }
+        }
+      } catch (e) {
+        log('Pi.init ERROR: ' + errDetails(e));
+      }
+    }
+
+    async function doAuth(scopes) {
+      try {
+        await initPi();
+        log('authenticate scopes=' + JSON.stringify(scopes));
+        const auth = await window.Pi.authenticate(scopes, function (payment) {
+          log('onIncompletePaymentFound called: ' + JSON.stringify(payment || {}));
+        });
+        log('authenticate OK keys=' + Object.keys(auth || {}).join(','));
+        log('user=' + JSON.stringify(auth && auth.user ? auth.user : null));
+        log('hasAccessToken=' + !!(auth && auth.accessToken));
+      } catch (e) {
+        log('authenticate ERROR: ' + errDetails(e));
+      }
+    }
+
+    document.getElementById('btn-init').addEventListener('click', function () {
+      initPi();
+    });
+
+    document.getElementById('btn-auth-username').addEventListener('click', function () {
+      doAuth(['username']);
+    });
+
+    document.getElementById('btn-auth-payments').addEventListener('click', function () {
+      doAuth(['username', 'payments']);
+    });
+
+    log('Ready. Tap Init SDK first.');
+  </script>
+</body>
+</html>
