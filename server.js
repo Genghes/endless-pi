@@ -12,6 +12,17 @@ const authRouter = require('./server/routes/auth');
 const scoresRouter = require('./server/routes/scores');
 
 const app = express();
+app.enable('trust proxy');
+
+// Force HTTPS in production (Render/other reverse proxies set x-forwarded-proto)
+app.use((req, res, next) => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const proto = req.headers['x-forwarded-proto'];
+  if (isProduction && proto && proto !== 'https') {
+    return res.redirect(301, `https://${req.headers.host}${req.originalUrl}`);
+  }
+  return next();
+});
 
 // Security headers (relaxed CSP for Phaser + Pi SDK CDN)
 app.use(
