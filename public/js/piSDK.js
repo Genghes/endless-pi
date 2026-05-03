@@ -135,6 +135,7 @@ class PiSDKWrapper {
     } catch (piErr) {
       const msg = this._extractErrorMessage(piErr);
       const details = this._extractErrorDetails(piErr);
+
       if (/not initialized/i.test(msg)) {
         if (window.__piLog) window.__piLog('authenticate: SDK not initialized, re-init and retry once');
         try {
@@ -152,15 +153,12 @@ class PiSDKWrapper {
           if (window.__piLog) window.__piLog('authenticate: retry ERROR: ' + this._extractErrorMessage(retryErr));
           throw retryErr;
         }
-      } else {
-      if (msg === 'NOT_PI_BROWSER') {
+      } else if (msg === 'NOT_PI_BROWSER') {
         console.warn('[PiSDK] Not in Pi Browser – switching to demo mode.');
         if (window.__piLog) window.__piLog('authenticate: 30s TIMEOUT → demo mode');
         this.isDemoMode = true;
         return this._mockAuth();
-      }
-
-      {
+      } else {
       // Real Pi auth error (app not registered, URL mismatch etc.) – rethrow
       // so MenuScene can show a retry button instead of silently going to demo.
       console.error('[PiSDK] Pi.authenticate() error:', piErr);
