@@ -96,6 +96,8 @@ export default class MenuScene extends Phaser.Scene {
       .setStrokeStyle(1, 0x4A90D9);
     this.userTxt  = this.add.text(0, 0, '⏳ Connecting to Pi Browser...', {
       font: '18px Arial', color: '#aaaaaa',
+      align: 'center',
+      wordWrap: { width: 330, useAdvancedWrap: true },
     }).setOrigin(0.5);
     this.userPanel.add([this.userBg, this.userTxt]);
 
@@ -161,12 +163,17 @@ export default class MenuScene extends Phaser.Scene {
       this._onLogin(user);
     } catch (e) {
       console.error('[Menu] Auth failed:', e.message);
-      const reason = e?.message ? `\n(${e.message})` : '';
-      this.userTxt.setText(`⚠️  Pi auth failed – tap to retry${reason}`);
+      const reason = e?.message || 'Unknown error';
+      if (window.__piLog) window.__piLog('menu: auth failed reason=' + reason);
+      this.userBg.setSize(360, 96);
+      this.userTxt.setFontSize(14);
+      this.userTxt.setText(`⚠️ Pi auth failed – tap to retry\n(${reason})`);
       this.userTxt.setColor('#ff6666');
       this.userBg.removeAllListeners('pointerup');
       this.userBg.setInteractive({ useHandCursor: true })
         .once('pointerup', () => {
+          this.userBg.setSize(360, 48);
+          this.userTxt.setFontSize(18);
           this.userTxt.setText('⏳ Connecting to Pi Browser...');
           this.userTxt.setColor('#aaaaaa');
           this._tryAutoLogin();
