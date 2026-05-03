@@ -37,7 +37,13 @@ class PiSDKWrapper {
 
     const scopes = ['username', 'payments'];
 
-    return new Promise((resolve, reject) => {
+    // If Pi.authenticate() doesn't respond within 6s we're not in Pi Browser
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Pi Browser not detected')), 6000)
+    );
+
+    return Promise.race([
+      new Promise((resolve, reject) => {
       window.Pi.authenticate(scopes, (incompletePayment) => {
         // Handle any unresolved payment left from a previous session
         this._resolveIncompletePayment(incompletePayment);
@@ -73,6 +79,12 @@ class PiSDKWrapper {
           }
         })
         .catch(reject);
+      }),
+      timeout,
+    ]).catch((err) => {
+      console.warn('[PiSDK] Auth timed out or failed, switching to demo mode:', err.message);
+      this.isDemoMode = true;
+      return this._mockAuth();
     });
   }
 

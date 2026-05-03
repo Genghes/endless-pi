@@ -93,7 +93,7 @@ export default class MenuScene extends Phaser.Scene {
     this.userPanel = this.add.container(GAME_WIDTH / 2, 506);
     this.userBg   = this.add.rectangle(0, 0, 360, 48, 0x000000, 0.5)
       .setStrokeStyle(1, 0x4A90D9);
-    this.userTxt  = this.add.text(0, 0, '⏳ Connecting to Pi...', {
+    this.userTxt  = this.add.text(0, 0, '⏳ Connecting to Pi Browser...', {
       font: '18px Arial', color: '#aaaaaa',
     }).setOrigin(0.5);
     this.userPanel.add([this.userBg, this.userTxt]);
@@ -163,8 +163,13 @@ export default class MenuScene extends Phaser.Scene {
   }
 
   _onLogin(user) {
-    this.userTxt.setText(`👤 ${user.username}   🏆 Best: ${(user.highScore || 0).toLocaleString()}`);
-    this.userTxt.setColor('#FFD700');
+    if (piSDK.isDemoMode) {
+      this.userTxt.setText('▶ Playing in demo mode  (open in Pi Browser for full features)');
+      this.userTxt.setColor('#ff9900');
+    } else {
+      this.userTxt.setText(`👤 ${user.username}   🏆 Best: ${(user.highScore || 0).toLocaleString()}`);
+      this.userTxt.setColor('#FFD700');
+    }
   }
 
   // ─── Leaderboard overlay ──────────────────────────────────
