@@ -94,7 +94,7 @@ class PiSDKWrapper {
     // Always init right before auth; Pi browser context can be re-created.
     await this._ensurePiInitialized();
 
-    const scopes = ['username', 'payments'];
+    const primaryScopes = ['username', 'payments'];
 
     // In Pi Browser, Pi.authenticate() resolves within a second or two.
     // In a regular browser it hangs forever → we time out and use demo mode.
@@ -102,7 +102,7 @@ class PiSDKWrapper {
     let auth;
     try {
       auth = await Promise.race([
-        window.Pi.authenticate(scopes, (incompletePayment) => {
+        window.Pi.authenticate(primaryScopes, (incompletePayment) => {
           this._resolveIncompletePayment(incompletePayment);
         }),
         new Promise((_, reject) =>
@@ -117,7 +117,7 @@ class PiSDKWrapper {
         try {
           await this._ensurePiInitialized(true);
           auth = await Promise.race([
-            window.Pi.authenticate(scopes, (incompletePayment) => {
+            window.Pi.authenticate(primaryScopes, (incompletePayment) => {
               this._resolveIncompletePayment(incompletePayment);
             }),
             new Promise((_, reject) =>
@@ -136,11 +136,34 @@ class PiSDKWrapper {
         this.isDemoMode = true;
         return this._mockAuth();
       }
+
+      // Some Pi app setups fail generic auth when requesting payments scope up front.
+      // Fallback to username-only to allow login, then payments can be requested later.
+      if (/authentication failed/i.test(msg)) {
+        if (window.__piLog) {
+          window.__piLog('authenticate: primary scopes failed, trying username-only fallback');
+        }
+        try {
+          await this._ensurePiInitialized(true);
+          auth = await Promise.race([
+            window.Pi.authenticate(['username']),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('NOT_PI_BROWSER')), 30000)
+            ),
+          ]);
+          if (window.__piLog) window.__piLog('authenticate: username-only fallback succeeded');
+        } catch (fallbackErr) {
+          const fallbackMsg = this._extractErrorMessage(fallbackErr);
+          if (window.__piLog) window.__piLog('authenticate: username fallback ERROR: ' + fallbackMsg);
+          throw new Error(fallbackMsg);
+        }
+      } else {
       // Real Pi auth error (app not registered, URL mismatch etc.) – rethrow
       // so MenuScene can show a retry button instead of silently going to demo.
       console.error('[PiSDK] Pi.authenticate() error:', piErr);
       if (window.__piLog) window.__piLog('authenticate: ERROR: ' + msg);
       throw new Error(msg);
+      }
       }
     }
 
