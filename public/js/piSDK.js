@@ -110,8 +110,11 @@ class PiSDKWrapper {
       return this._mockAuth();
     }
 
-    // Always init right before auth; Pi browser context can be re-created.
-    await this._ensurePiInitialized();
+    // Do not await before authenticate() to preserve iOS user-gesture context
+    // for Pi popup flows. We pre-init during app boot and retry init on error.
+    if (!this.piSdkInitialized) {
+      this.init();
+    }
 
     // Keep initial login minimal and user-gesture friendly.
     // Requesting payments scope here can cause duplicate prompts/failures

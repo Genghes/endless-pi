@@ -119,12 +119,7 @@
     window.__piLog('URL: ' + location.href);
 
     if (typeof Pi !== 'undefined') {
-      try {
-        Pi.init({ version: '2.0', sandbox: !!window.__piSandbox });
-        window.__piLog('Pi.init() OK, sandbox=' + !!window.__piSandbox);
-      } catch(e) {
-        window.__piLog('Pi.init() ERROR: ' + e.message);
-      }
+      window.__piLog('Pi SDK script ready (init handled by piSDK.js)');
     } else {
       window.__piLog('Pi is undefined after sdk.js load!');
     }
