@@ -11,6 +11,7 @@ export default class MenuScene extends Phaser.Scene {
   init() {
     this.selectedChar = 'blue_runner';
     this._loginAttempted = false;
+    this._authInFlight = false;
   }
 
   create() {
@@ -152,19 +153,26 @@ export default class MenuScene extends Phaser.Scene {
   // ─── Pi Auth ──────────────────────────────────────────────
 
   async _tryAutoLogin() {
+    if (this._authInFlight) return;
+    this._authInFlight = true;
+
     try {
       const user = await piSDK.authenticate();
       this._onLogin(user);
     } catch (e) {
       console.error('[Menu] Auth failed:', e.message);
-      this.userTxt.setText('⚠️  Pi auth failed – tap to retry\n(Check app is registered in Developer Portal)');
+      const reason = e?.message ? `\n(${e.message})` : '';
+      this.userTxt.setText(`⚠️  Pi auth failed – tap to retry${reason}`);
       this.userTxt.setColor('#ff6666');
+      this.userBg.removeAllListeners('pointerup');
       this.userBg.setInteractive({ useHandCursor: true })
-        .on('pointerup', () => {
+        .once('pointerup', () => {
           this.userTxt.setText('⏳ Connecting to Pi Browser...');
           this.userTxt.setColor('#aaaaaa');
           this._tryAutoLogin();
         });
+    } finally {
+      this._authInFlight = false;
     }
   }
 

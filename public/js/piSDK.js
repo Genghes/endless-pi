@@ -66,15 +66,30 @@ class PiSDKWrapper {
       throw piErr;
     }
 
+    const authUser = auth?.user || auth?.userData || null;
+    const accessToken = auth?.accessToken || auth?.token || null;
+    if (window.__piLog) {
+      const keys = auth && typeof auth === 'object' ? Object.keys(auth).join(',') : 'non-object';
+      window.__piLog(`authenticate: auth keys = ${keys}`);
+    }
+
+    if (!authUser && !accessToken) {
+      throw new Error('Pi auth returned unexpected payload');
+    }
+
     // Backend verify – 15s timeout (handles Render cold-start).
     // Falls back to Pi-provided data only on failure.
     try {
+      if (!accessToken) {
+        throw new Error('No access token from Pi auth');
+      }
+
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 15000);
       const resp = await fetch('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken: auth.accessToken }),
+        body: JSON.stringify({ accessToken }),
         signal: controller.signal,
       });
       clearTimeout(timer);
@@ -92,11 +107,14 @@ class PiSDKWrapper {
     } catch (backendErr) {
       console.warn('[PiSDK] Backend verify unavailable, using Pi auth only:', backendErr.message);
       this.currentUser = {
-        uid:                auth.user.uid,
-        username:           auth.user.username || 'Pioneer',
+        uid:                authUser?.uid || 'pi_unknown_uid',
+        username:           authUser?.username || 'Pioneer',
         unlockedCharacters: [],
         highScore:          0,
       };
+      if (window.__piLog) {
+        window.__piLog(`authenticate: backend fallback user=${this.currentUser.username} uid=${this.currentUser.uid}`);
+      }
     }
 
     return this.currentUser;
