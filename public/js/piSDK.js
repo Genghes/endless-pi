@@ -14,19 +14,14 @@ class PiSDKWrapper {
   //  Init
   // ----------------------------------------------------------
   init() {
-    // Pi Browser injects its own SDK and has 'PiBrowser' in the user agent
-    this.inPiBrowser = /PiBrowser/i.test(window.navigator.userAgent);
-    console.log('[PiSDK] In Pi Browser:', this.inPiBrowser);
-
-    if (!this.inPiBrowser || typeof window.Pi === 'undefined') {
-      console.warn('[PiSDK] Not in Pi Browser – running in demo mode.');
-      this.isDemoMode     = true;
-      this.isInitialized  = false;
+    if (typeof window.Pi === 'undefined') {
+      console.warn('[PiSDK] Pi SDK not loaded – running in demo mode.');
+      this.isDemoMode    = true;
+      this.isInitialized = false;
       return false;
     }
-    // SDK already initialised in index.html <script> block
     this.isInitialized = true;
-    console.log('[PiSDK] Ready. Sandbox:', window.__piSandbox);
+    console.log('[PiSDK] Pi SDK found. Sandbox:', window.__piSandbox);
     return true;
   }
 
@@ -41,25 +36,32 @@ class PiSDKWrapper {
 
     const scopes = ['username', 'payments'];
 
-    // Pi.authenticate() is awaited with no timeout – Pi Browser resolves this
-    // when the user approves (or has already approved) the app. Any error here
-    // means the app is not registered / URL mismatch, so we rethrow to let the
-    // MenuScene show a retry button. We never auto-fallback to demo mode while
-    // inside Pi Browser.
+    // In Pi Browser, Pi.authenticate() resolves within a second or two.
+    // In a regular browser it hangs forever → we time out and use demo mode.
     let auth;
     try {
-      auth = await window.Pi.authenticate(scopes, (incompletePayment) => {
-        this._resolveIncompletePayment(incompletePayment);
-      });
+      auth = await Promise.race([
+        window.Pi.authenticate(scopes, (incompletePayment) => {
+          this._resolveIncompletePayment(incompletePayment);
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('NOT_PI_BROWSER')), 12000)
+        ),
+      ]);
     } catch (piErr) {
-      console.error('[PiSDK] Pi.authenticate() rejected:', piErr);
-      // Rethrow so MenuScene can show "tap to retry"
+      if (piErr.message === 'NOT_PI_BROWSER') {
+        console.warn('[PiSDK] Not in Pi Browser – switching to demo mode.');
+        this.isDemoMode = true;
+        return this._mockAuth();
+      }
+      // Real Pi auth error (app not registered, URL mismatch etc.) – rethrow
+      // so MenuScene can show a retry button instead of silently going to demo.
+      console.error('[PiSDK] Pi.authenticate() error:', piErr);
       throw piErr;
     }
 
-    // Backend verify – give it its own 15s timeout so a cold Render start
-    // doesn't block indefinitely. On failure we still have the Pi auth token
-    // and fall back to client-side data only.
+    // Backend verify – 15s timeout (handles Render cold-start).
+    // Falls back to Pi-provided data only on failure.
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 15000);
@@ -82,7 +84,6 @@ class PiSDKWrapper {
         highScore:          data.highScore || 0,
       };
     } catch (backendErr) {
-      // Backend unavailable – use Pi-provided data, shop/unlock features limited
       console.warn('[PiSDK] Backend verify unavailable, using Pi auth only:', backendErr.message);
       this.currentUser = {
         uid:                auth.user.uid,
