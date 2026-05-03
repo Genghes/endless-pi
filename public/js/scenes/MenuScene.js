@@ -156,9 +156,15 @@ export default class MenuScene extends Phaser.Scene {
       const user = await piSDK.authenticate();
       this._onLogin(user);
     } catch (e) {
-      this.userTxt.setText('⚠️  Login failed – tap to retry');
+      console.error('[Menu] Auth failed:', e.message);
+      this.userTxt.setText('⚠️  Pi auth failed – tap to retry\n(Check app is registered in Developer Portal)');
+      this.userTxt.setColor('#ff6666');
       this.userBg.setInteractive({ useHandCursor: true })
-        .on('pointerup', () => this._tryAutoLogin());
+        .on('pointerup', () => {
+          this.userTxt.setText('⏳ Connecting to Pi Browser...');
+          this.userTxt.setColor('#aaaaaa');
+          this._tryAutoLogin();
+        });
     }
   }
 

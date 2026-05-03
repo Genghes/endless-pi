@@ -41,55 +41,58 @@ class PiSDKWrapper {
 
     const scopes = ['username', 'payments'];
 
-    // Safety-net timeout – 20s gives Pi Browser plenty of time on slow connections
-    const timeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Pi authentication timed out')), 20000)
-    );
-
-    return Promise.race([
-      new Promise((resolve, reject) => {
-      window.Pi.authenticate(scopes, (incompletePayment) => {
-        // Handle any unresolved payment left from a previous session
+    // Pi.authenticate() is awaited with no timeout – Pi Browser resolves this
+    // when the user approves (or has already approved) the app. Any error here
+    // means the app is not registered / URL mismatch, so we rethrow to let the
+    // MenuScene show a retry button. We never auto-fallback to demo mode while
+    // inside Pi Browser.
+    let auth;
+    try {
+      auth = await window.Pi.authenticate(scopes, (incompletePayment) => {
         this._resolveIncompletePayment(incompletePayment);
-      })
-        .then(async (auth) => {
-          try {
-            const resp = await fetch('/api/auth/verify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ accessToken: auth.accessToken }),
-            });
-            if (!resp.ok) throw new Error('Backend verify failed');
-            const data = await resp.json();
-            if (!data.verified) throw new Error('Not verified');
+      });
+    } catch (piErr) {
+      console.error('[PiSDK] Pi.authenticate() rejected:', piErr);
+      // Rethrow so MenuScene can show "tap to retry"
+      throw piErr;
+    }
 
-            this.currentUser = {
-              uid:                data.uid,
-              username:           data.username,
-              unlockedCharacters: data.unlockedCharacters || [],
-              highScore:          data.highScore || 0,
-            };
-            resolve(this.currentUser);
-          } catch (backendErr) {
-            // Fallback: use client-side auth only (no shop/unlock features)
-            console.warn('[PiSDK] Backend verify unavailable, using client auth only:', backendErr.message);
-            this.currentUser = {
-              uid:                auth.user.uid,
-              username:           auth.user.username || 'Pioneer',
-              unlockedCharacters: [],
-              highScore:          0,
-            };
-            resolve(this.currentUser);
-          }
-        })
-        .catch(reject);
-      }),
-      timeout,
-    ]).catch((err) => {
-      console.warn('[PiSDK] Auth timed out or failed, switching to demo mode:', err.message);
-      this.isDemoMode = true;
-      return this._mockAuth();
-    });
+    // Backend verify – give it its own 15s timeout so a cold Render start
+    // doesn't block indefinitely. On failure we still have the Pi auth token
+    // and fall back to client-side data only.
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
+      const resp = await fetch('/api/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken: auth.accessToken }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+
+      if (!resp.ok) throw new Error(`Backend returned ${resp.status}`);
+      const data = await resp.json();
+      if (!data.verified) throw new Error('Not verified');
+
+      this.currentUser = {
+        uid:                data.uid,
+        username:           data.username,
+        unlockedCharacters: data.unlockedCharacters || [],
+        highScore:          data.highScore || 0,
+      };
+    } catch (backendErr) {
+      // Backend unavailable – use Pi-provided data, shop/unlock features limited
+      console.warn('[PiSDK] Backend verify unavailable, using Pi auth only:', backendErr.message);
+      this.currentUser = {
+        uid:                auth.user.uid,
+        username:           auth.user.username || 'Pioneer',
+        unlockedCharacters: [],
+        highScore:          0,
+      };
+    }
+
+    return this.currentUser;
   }
 
   // ----------------------------------------------------------
