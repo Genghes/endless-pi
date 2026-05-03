@@ -35,7 +35,17 @@
     #loading-screen p  { font-size: 1rem; color: #aaa; }
     #loading-screen.hidden { display: none; }
 
-    /* Pi SDK loads in iframe inside Pi Browser - no extra styles needed */
+    /* Debug overlay (shown when ?debug is in URL) */
+    #pi-debug {
+      display: none;
+      position: fixed; top: 0; left: 0; right: 0;
+      background: rgba(0,0,0,0.85); color: #0f0;
+      font-family: monospace; font-size: 11px;
+      padding: 6px 8px; z-index: 9999;
+      max-height: 45vh; overflow-y: auto;
+      border-bottom: 1px solid #0f0;
+    }
+    #pi-debug.visible { display: block; }
   </style>
 </head>
 <body>
@@ -48,6 +58,7 @@
 
   <!-- Game canvas container -->
   <div id="game-container"></div>
+  <div id="pi-debug"></div>
 
   <!-- Runtime config (sandbox flag served from server env var PI_SANDBOX) -->
   <script src="/js/runtime-config.js"></script>
@@ -56,8 +67,31 @@
   <script src="https://sdk.minepi.com/pi-sdk.js"></script>
   <!-- Initialize SDK using sandbox flag injected by server -->
   <script>
+    // Debug helper - visible on screen when ?debug in URL
+    (function() {
+      var el = document.getElementById('pi-debug');
+      var show = location.search.indexOf('debug') !== -1;
+      if (show) el.classList.add('visible');
+      window.__piLog = function(msg) {
+        var t = new Date().toISOString().substr(11,12);
+        console.log('[PiDebug] ' + msg);
+        if (show) el.innerHTML += t + ' ' + msg + '<br>';
+      };
+    })();
+
+    window.__piLog('Pi SDK loaded: ' + (typeof Pi !== 'undefined'));
+    window.__piLog('sandbox flag: ' + window.__piSandbox);
+    window.__piLog('UA: ' + navigator.userAgent.substr(0, 80));
+
     if (typeof Pi !== 'undefined') {
-      Pi.init({ version: '2.0', sandbox: !!window.__piSandbox });
+      try {
+        Pi.init({ version: '2.0', sandbox: !!window.__piSandbox });
+        window.__piLog('Pi.init() OK, sandbox=' + !!window.__piSandbox);
+      } catch(e) {
+        window.__piLog('Pi.init() ERROR: ' + e.message);
+      }
+    } else {
+      window.__piLog('Pi is undefined after sdk.js load!');
     }
   </script>
 

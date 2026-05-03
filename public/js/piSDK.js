@@ -16,11 +16,13 @@ class PiSDKWrapper {
   init() {
     if (typeof window.Pi === 'undefined') {
       console.warn('[PiSDK] Pi SDK not loaded – running in demo mode.');
+      if (window.__piLog) window.__piLog('init: window.Pi is undefined → demo mode');
       this.isDemoMode    = true;
       this.isInitialized = false;
       return false;
     }
     this.isInitialized = true;
+    if (window.__piLog) window.__piLog('init: window.Pi found. sandbox=' + window.__piSandbox);
     console.log('[PiSDK] Pi SDK found. Sandbox:', window.__piSandbox);
     return true;
   }
@@ -38,6 +40,7 @@ class PiSDKWrapper {
 
     // In Pi Browser, Pi.authenticate() resolves within a second or two.
     // In a regular browser it hangs forever → we time out and use demo mode.
+    if (window.__piLog) window.__piLog('authenticate: calling Pi.authenticate() ...');
     let auth;
     try {
       auth = await Promise.race([
@@ -45,18 +48,21 @@ class PiSDKWrapper {
           this._resolveIncompletePayment(incompletePayment);
         }),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('NOT_PI_BROWSER')), 12000)
+          setTimeout(() => reject(new Error('NOT_PI_BROWSER')), 30000)
         ),
       ]);
+      if (window.__piLog) window.__piLog('authenticate: Pi.authenticate() resolved! user=' + (auth && auth.user && auth.user.username));
     } catch (piErr) {
       if (piErr.message === 'NOT_PI_BROWSER') {
         console.warn('[PiSDK] Not in Pi Browser – switching to demo mode.');
+        if (window.__piLog) window.__piLog('authenticate: 30s TIMEOUT → demo mode');
         this.isDemoMode = true;
         return this._mockAuth();
       }
       // Real Pi auth error (app not registered, URL mismatch etc.) – rethrow
       // so MenuScene can show a retry button instead of silently going to demo.
       console.error('[PiSDK] Pi.authenticate() error:', piErr);
+      if (window.__piLog) window.__piLog('authenticate: ERROR: ' + piErr.message);
       throw piErr;
     }
 
