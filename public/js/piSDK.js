@@ -6,6 +6,7 @@
 class PiSDKWrapper {
   constructor() {
     this.isInitialized = false;
+    this.piSdkInitialized = false;
     this.currentUser    = null;   // { uid, username, unlockedCharacters, highScore }
     this.isDemoMode     = false;  // true when Pi SDK is not available
   }
@@ -18,13 +19,25 @@ class PiSDKWrapper {
       console.warn('[PiSDK] Pi SDK not loaded – running in demo mode.');
       if (window.__piLog) window.__piLog('init: window.Pi is undefined → demo mode');
       this.isDemoMode    = true;
+      this.piSdkInitialized = false;
       this.isInitialized = false;
       return false;
     }
+
+    try {
+      window.Pi.init({ version: '2.0', sandbox: !!window.__piSandbox });
+      this.piSdkInitialized = true;
+      if (window.__piLog) window.__piLog('init: window.Pi.init() OK');
+    } catch (err) {
+      this.piSdkInitialized = false;
+      console.error('[PiSDK] Pi.init() failed:', err.message);
+      if (window.__piLog) window.__piLog('init: window.Pi.init() ERROR: ' + err.message);
+    }
+
     this.isInitialized = true;
     if (window.__piLog) window.__piLog('init: window.Pi found. sandbox=' + window.__piSandbox);
     console.log('[PiSDK] Pi SDK found. Sandbox:', window.__piSandbox);
-    return true;
+    return this.piSdkInitialized;
   }
 
   // ----------------------------------------------------------
@@ -34,6 +47,10 @@ class PiSDKWrapper {
   async authenticate() {
     if (this.isDemoMode) {
       return this._mockAuth();
+    }
+
+    if (!this.piSdkInitialized) {
+      this.init();
     }
 
     const scopes = ['username', 'payments'];
@@ -53,6 +70,26 @@ class PiSDKWrapper {
       ]);
       if (window.__piLog) window.__piLog('authenticate: Pi.authenticate() resolved! user=' + (auth && auth.user && auth.user.username));
     } catch (piErr) {
+      const msg = String(piErr?.message || '');
+      if (/not initialized/i.test(msg)) {
+        if (window.__piLog) window.__piLog('authenticate: SDK not initialized, re-init and retry once');
+        try {
+          window.Pi.init({ version: '2.0', sandbox: !!window.__piSandbox });
+          this.piSdkInitialized = true;
+          auth = await Promise.race([
+            window.Pi.authenticate(scopes, (incompletePayment) => {
+              this._resolveIncompletePayment(incompletePayment);
+            }),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('NOT_PI_BROWSER')), 30000)
+            ),
+          ]);
+        } catch (retryErr) {
+          console.error('[PiSDK] Retry authenticate failed:', retryErr);
+          if (window.__piLog) window.__piLog('authenticate: retry ERROR: ' + String(retryErr?.message || retryErr));
+          throw retryErr;
+        }
+      } else {
       if (piErr.message === 'NOT_PI_BROWSER') {
         console.warn('[PiSDK] Not in Pi Browser – switching to demo mode.');
         if (window.__piLog) window.__piLog('authenticate: 30s TIMEOUT → demo mode');
@@ -64,6 +101,7 @@ class PiSDKWrapper {
       console.error('[PiSDK] Pi.authenticate() error:', piErr);
       if (window.__piLog) window.__piLog('authenticate: ERROR: ' + piErr.message);
       throw piErr;
+      }
     }
 
     const authUser = auth?.user || auth?.userData || null;
