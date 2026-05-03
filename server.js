@@ -36,14 +36,23 @@ app.use(
           'https://sdk.minepi.com',
           'https://cdn.jsdelivr.net',
         ],
-        connectSrc: ["'self'", 'https://api.minepi.com', 'https://sdk.minepi.com'],
+        connectSrc: [
+          "'self'",
+          'https://api.minepi.com',
+          'https://sdk.minepi.com',
+          'https://*.minepi.com',
+        ],
         imgSrc: ["'self'", 'data:', 'blob:'],
         styleSrc: ["'self'", "'unsafe-inline'"],
         fontSrc: ["'self'", 'data:'],
-        frameSrc: ["'none'"],
+        // Pi SDK uses frames during authentication/payment flows.
+        frameSrc: ["'self'", 'https://sdk.minepi.com', 'https://*.minepi.com'],
+        // Allow Pi Browser/Portal to embed the app.
+        frameAncestors: ["'self'", 'https://*.minepi.com'],
       },
     },
     crossOriginEmbedderPolicy: false,
+    frameguard: false,
   })
 );
 
