@@ -58,6 +58,15 @@ app.use('/api/payments', paymentsRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/scores', scoresRouter);
 
+// Runtime config injected into the client (controls Pi SDK sandbox flag)
+// Set PI_SANDBOX=true on Render when testing, PI_SANDBOX=false for mainnet.
+app.get('/js/runtime-config.js', (req, res) => {
+  const sandbox = process.env.PI_SANDBOX === 'true';
+  res.type('application/javascript').send(
+    `window.__piSandbox = ${sandbox};`
+  );
+});
+
 // Domain verification file for Pi Developer Portal (Step 8 checklist)
 // Replace content with the string from your Developer Portal
 app.get('/.well-known/pi-domain-verification', (req, res) => {

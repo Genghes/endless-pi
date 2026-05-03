@@ -49,16 +49,15 @@
   <!-- Game canvas container -->
   <div id="game-container"></div>
 
+  <!-- Runtime config (sandbox flag served from server env var PI_SANDBOX) -->
+  <script src="/js/runtime-config.js"></script>
+
   <!-- Pi Network SDK (required for Pi Browser integration) -->
   <script src="https://sdk.minepi.com/pi-sdk.js"></script>
-  <!-- Initialize SDK. sandbox=true in dev, false in production.
-       Reads from a global set by the module below after Phaser loads. -->
+  <!-- Initialize SDK using sandbox flag injected by server -->
   <script>
-    // Will be called once piSDK.js module initialises
-    window.__piSandbox = window.location.hostname === 'localhost' ||
-                         window.location.hostname === '127.0.0.1';
     if (typeof Pi !== 'undefined') {
-      Pi.init({ version: '2.0', sandbox: window.__piSandbox });
+      Pi.init({ version: '2.0', sandbox: !!window.__piSandbox });
     }
   </script>
 
