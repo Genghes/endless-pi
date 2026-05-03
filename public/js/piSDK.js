@@ -7,6 +7,7 @@ class PiSDKWrapper {
   constructor() {
     this.isInitialized = false;
     this.piSdkInitialized = false;
+    this.piInitPromise = null;
     this.currentUser    = null;   // { uid, username, unlockedCharacters, highScore }
     this.isDemoMode     = false;  // true when Pi SDK is not available
   }
@@ -24,20 +25,17 @@ class PiSDKWrapper {
       return false;
     }
 
-    try {
-      window.Pi.init({ version: '2.0', sandbox: !!window.__piSandbox });
-      this.piSdkInitialized = true;
-      if (window.__piLog) window.__piLog('init: window.Pi.init() OK');
-    } catch (err) {
-      this.piSdkInitialized = false;
-      console.error('[PiSDK] Pi.init() failed:', err.message);
-      if (window.__piLog) window.__piLog('init: window.Pi.init() ERROR: ' + err.message);
-    }
+    // Fire-and-forget bootstrap; authenticate() awaits concrete init completion.
+    this._ensurePiInitialized().catch((err) => {
+      const msg = this._extractErrorMessage(err);
+      console.error('[PiSDK] Pi.init() failed:', msg);
+      if (window.__piLog) window.__piLog('init: window.Pi.init() ERROR: ' + msg);
+    });
 
     this.isInitialized = true;
     if (window.__piLog) window.__piLog('init: window.Pi found. sandbox=' + window.__piSandbox);
     console.log('[PiSDK] Pi SDK found. Sandbox:', window.__piSandbox);
-    return this.piSdkInitialized;
+    return true;
   }
 
   _extractErrorMessage(err) {
@@ -52,24 +50,36 @@ class PiSDKWrapper {
     }
   }
 
-  _ensurePiInitialized() {
+  async _ensurePiInitialized(force = false) {
     if (typeof window.Pi === 'undefined') {
       this.isDemoMode = true;
       this.piSdkInitialized = false;
       throw new Error('Pi SDK not available in this context');
     }
 
-    try {
-      window.Pi.init({ version: '2.0', sandbox: !!window.__piSandbox });
-      this.piSdkInitialized = true;
-      if (window.__piLog) window.__piLog('ensureInit: window.Pi.init() OK');
-      return true;
-    } catch (err) {
-      this.piSdkInitialized = false;
-      const msg = this._extractErrorMessage(err);
-      if (window.__piLog) window.__piLog('ensureInit: ERROR: ' + msg);
-      throw new Error(msg);
-    }
+    if (this.piSdkInitialized && !force) return true;
+    if (this.piInitPromise && !force) return this.piInitPromise;
+
+    this.piInitPromise = (async () => {
+      try {
+        const initResult = window.Pi.init({ version: '2.0', sandbox: !!window.__piSandbox });
+        if (initResult && typeof initResult.then === 'function') {
+          await initResult;
+        }
+        this.piSdkInitialized = true;
+        if (window.__piLog) window.__piLog('ensureInit: window.Pi.init() OK');
+        return true;
+      } catch (err) {
+        this.piSdkInitialized = false;
+        const msg = this._extractErrorMessage(err);
+        if (window.__piLog) window.__piLog('ensureInit: ERROR: ' + msg);
+        throw new Error(msg);
+      } finally {
+        this.piInitPromise = null;
+      }
+    })();
+
+    return this.piInitPromise;
   }
 
   // ----------------------------------------------------------
@@ -82,7 +92,7 @@ class PiSDKWrapper {
     }
 
     // Always init right before auth; Pi browser context can be re-created.
-    this._ensurePiInitialized();
+    await this._ensurePiInitialized();
 
     const scopes = ['username', 'payments'];
 
@@ -105,7 +115,7 @@ class PiSDKWrapper {
       if (/not initialized/i.test(msg)) {
         if (window.__piLog) window.__piLog('authenticate: SDK not initialized, re-init and retry once');
         try {
-          this._ensurePiInitialized();
+          await this._ensurePiInitialized(true);
           auth = await Promise.race([
             window.Pi.authenticate(scopes, (incompletePayment) => {
               this._resolveIncompletePayment(incompletePayment);
