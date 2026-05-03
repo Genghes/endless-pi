@@ -40,6 +40,38 @@ class PiSDKWrapper {
     return this.piSdkInitialized;
   }
 
+  _extractErrorMessage(err) {
+    if (!err) return 'Unknown error';
+    if (typeof err === 'string') return err;
+    if (err.message) return String(err.message);
+    if (err.error && err.error.message) return String(err.error.message);
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return String(err);
+    }
+  }
+
+  _ensurePiInitialized() {
+    if (typeof window.Pi === 'undefined') {
+      this.isDemoMode = true;
+      this.piSdkInitialized = false;
+      throw new Error('Pi SDK not available in this context');
+    }
+
+    try {
+      window.Pi.init({ version: '2.0', sandbox: !!window.__piSandbox });
+      this.piSdkInitialized = true;
+      if (window.__piLog) window.__piLog('ensureInit: window.Pi.init() OK');
+      return true;
+    } catch (err) {
+      this.piSdkInitialized = false;
+      const msg = this._extractErrorMessage(err);
+      if (window.__piLog) window.__piLog('ensureInit: ERROR: ' + msg);
+      throw new Error(msg);
+    }
+  }
+
   // ----------------------------------------------------------
   //  Authenticate
   //  Returns the current user object or throws on failure.
@@ -49,9 +81,8 @@ class PiSDKWrapper {
       return this._mockAuth();
     }
 
-    if (!this.piSdkInitialized) {
-      this.init();
-    }
+    // Always init right before auth; Pi browser context can be re-created.
+    this._ensurePiInitialized();
 
     const scopes = ['username', 'payments'];
 
@@ -70,12 +101,11 @@ class PiSDKWrapper {
       ]);
       if (window.__piLog) window.__piLog('authenticate: Pi.authenticate() resolved! user=' + (auth && auth.user && auth.user.username));
     } catch (piErr) {
-      const msg = String(piErr?.message || '');
+      const msg = this._extractErrorMessage(piErr);
       if (/not initialized/i.test(msg)) {
         if (window.__piLog) window.__piLog('authenticate: SDK not initialized, re-init and retry once');
         try {
-          window.Pi.init({ version: '2.0', sandbox: !!window.__piSandbox });
-          this.piSdkInitialized = true;
+          this._ensurePiInitialized();
           auth = await Promise.race([
             window.Pi.authenticate(scopes, (incompletePayment) => {
               this._resolveIncompletePayment(incompletePayment);
@@ -86,11 +116,11 @@ class PiSDKWrapper {
           ]);
         } catch (retryErr) {
           console.error('[PiSDK] Retry authenticate failed:', retryErr);
-          if (window.__piLog) window.__piLog('authenticate: retry ERROR: ' + String(retryErr?.message || retryErr));
+          if (window.__piLog) window.__piLog('authenticate: retry ERROR: ' + this._extractErrorMessage(retryErr));
           throw retryErr;
         }
       } else {
-      if (piErr.message === 'NOT_PI_BROWSER') {
+      if (msg === 'NOT_PI_BROWSER') {
         console.warn('[PiSDK] Not in Pi Browser – switching to demo mode.');
         if (window.__piLog) window.__piLog('authenticate: 30s TIMEOUT → demo mode');
         this.isDemoMode = true;
@@ -99,8 +129,8 @@ class PiSDKWrapper {
       // Real Pi auth error (app not registered, URL mismatch etc.) – rethrow
       // so MenuScene can show a retry button instead of silently going to demo.
       console.error('[PiSDK] Pi.authenticate() error:', piErr);
-      if (window.__piLog) window.__piLog('authenticate: ERROR: ' + piErr.message);
-      throw piErr;
+      if (window.__piLog) window.__piLog('authenticate: ERROR: ' + msg);
+      throw new Error(msg);
       }
     }
 
@@ -169,6 +199,13 @@ class PiSDKWrapper {
     }
     if (!this.currentUser) {
       callbacks.onError?.(new Error('Not authenticated'), null);
+      return;
+    }
+
+    try {
+      this._ensurePiInitialized();
+    } catch (err) {
+      callbacks.onError?.(err, null);
       return;
     }
 
