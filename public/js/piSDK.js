@@ -8,6 +8,7 @@ class PiSDKWrapper {
     this.isInitialized = false;
     this.piSdkInitialized = false;
     this.piInitPromise = null;
+    this.nativeFeatures = null;
     this.currentUser    = null;   // { uid, username, unlockedCharacters, highScore }
     this.isDemoMode     = false;  // true when Pi SDK is not available
   }
@@ -87,6 +88,21 @@ class PiSDKWrapper {
         }
         this.piSdkInitialized = true;
         if (window.__piLog) window.__piLog('ensureInit: window.Pi.init() OK');
+
+        // SDK reference: Pi.nativeFeaturesList() shows if permission flow is supported.
+        if (typeof window.Pi.nativeFeaturesList === 'function') {
+          try {
+            this.nativeFeatures = await window.Pi.nativeFeaturesList();
+            if (window.__piLog) {
+              window.__piLog('ensureInit: nativeFeatures=' + JSON.stringify(this.nativeFeatures));
+            }
+          } catch (featuresErr) {
+            if (window.__piLog) {
+              window.__piLog('ensureInit: nativeFeatures ERROR=' + this._extractErrorMessage(featuresErr));
+            }
+          }
+        }
+
         return true;
       } catch (err) {
         this.piSdkInitialized = false;
@@ -114,6 +130,10 @@ class PiSDKWrapper {
     // for Pi popup flows. We pre-init during app boot and retry init on error.
     if (!this.piSdkInitialized) {
       this.init();
+    }
+
+    if (Array.isArray(this.nativeFeatures) && !this.nativeFeatures.includes('request_permission')) {
+      throw new Error('Pi Browser missing request_permission feature. Please update Pi Browser.');
     }
 
     // Keep initial login minimal and user-gesture friendly.
