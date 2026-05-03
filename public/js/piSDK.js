@@ -9,6 +9,7 @@ class PiSDKWrapper {
     this.piSdkInitialized = false;
     this.piInitPromise = null;
     this.nativeFeatures = null;
+    this.effectiveSandbox = null;
     this.currentUser    = null;   // { uid, username, unlockedCharacters, highScore }
     this.isDemoMode     = false;  // true when Pi SDK is not available
   }
@@ -70,7 +71,7 @@ class PiSDKWrapper {
     return parts.length ? parts.join(' | ') : this._extractErrorMessage(err);
   }
 
-  async _ensurePiInitialized(force = false) {
+  async _ensurePiInitialized(force = false, sandboxOverride = null) {
     if (typeof window.Pi === 'undefined') {
       this.isDemoMode = true;
       this.piSdkInitialized = false;
@@ -80,13 +81,16 @@ class PiSDKWrapper {
     if (this.piSdkInitialized && !force) return true;
     if (this.piInitPromise && !force) return this.piInitPromise;
 
+    const sandboxValue = sandboxOverride === null ? !!window.__piSandbox : !!sandboxOverride;
+
     this.piInitPromise = (async () => {
       try {
-        const initResult = window.Pi.init({ version: '2.0', sandbox: !!window.__piSandbox });
+        const initResult = window.Pi.init({ version: '2.0', sandbox: sandboxValue });
         if (initResult && typeof initResult.then === 'function') {
           await initResult;
         }
         this.piSdkInitialized = true;
+        this.effectiveSandbox = sandboxValue;
         if (window.__piLog) window.__piLog('ensureInit: window.Pi.init() OK');
 
         // SDK reference: Pi.nativeFeaturesList() shows if permission flow is supported.
@@ -181,6 +185,27 @@ class PiSDKWrapper {
         if (window.__piLog) window.__piLog('authenticate: 30s TIMEOUT → demo mode');
         this.isDemoMode = true;
         return this._mockAuth();
+      } else if (/authentication failed/i.test(msg)) {
+        // If env sandbox does not match immutable app network in Developer Portal,
+        // Pi SDK often rejects with generic "Authentication failed".
+        const flippedSandbox = !(this.effectiveSandbox ?? !!window.__piSandbox);
+        if (window.__piLog) window.__piLog('authenticate: trying flipped sandbox=' + flippedSandbox);
+        try {
+          await this._ensurePiInitialized(true, flippedSandbox);
+          auth = await Promise.race([
+            window.Pi.authenticate(primaryScopes, (incompletePayment) => {
+              this._resolveIncompletePayment(incompletePayment);
+            }),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('NOT_PI_BROWSER')), 30000)
+            ),
+          ]);
+          if (window.__piLog) window.__piLog('authenticate: flipped sandbox retry succeeded');
+        } catch (flipErr) {
+          const flipDetails = this._extractErrorDetails(flipErr);
+          if (window.__piLog) window.__piLog('authenticate: flipped sandbox retry ERROR: ' + flipDetails);
+          throw new Error(flipDetails);
+        }
       } else {
       // Real Pi auth error (app not registered, URL mismatch etc.) – rethrow
       // so MenuScene can show a retry button instead of silently going to demo.
