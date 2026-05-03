@@ -246,7 +246,7 @@ class PiSDKWrapper {
   // ----------------------------------------------------------
   //  Create Payment  (user → app)
   // ----------------------------------------------------------
-  createPayment(shopItem, callbacks) {
+  async createPayment(shopItem, callbacks) {
     if (this.isDemoMode) {
       alert('Pi payments require the Pi Browser.\nRunning in demo mode.');
       callbacks.onError?.(new Error('Demo mode'), null);
@@ -258,7 +258,7 @@ class PiSDKWrapper {
     }
 
     try {
-      this._ensurePiInitialized();
+      await this._ensurePiInitialized();
     } catch (err) {
       callbacks.onError?.(err, null);
       return;

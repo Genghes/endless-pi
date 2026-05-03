@@ -51,6 +51,10 @@ app.use(
         frameAncestors: ["'self'", 'https://*.minepi.com'],
       },
     },
+    // Pi auth uses cross-origin popup/iframe communication.
+    // COOP same-origin can break post-auth callback channel.
+    crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+    crossOriginResourcePolicy: false,
     crossOriginEmbedderPolicy: false,
     frameguard: false,
   })
