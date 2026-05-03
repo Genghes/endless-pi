@@ -19,7 +19,7 @@ export default class MenuScene extends Phaser.Scene {
     this._buildLogo();
     this._buildCharPreview();
     this._buildButtons();
-    this._tryAutoLogin();
+    this._prepareLoginPrompt();
   }
 
   // ─── Background ───────────────────────────────────────────
@@ -153,6 +153,17 @@ export default class MenuScene extends Phaser.Scene {
   }
 
   // ─── Pi Auth ──────────────────────────────────────────────
+
+  _prepareLoginPrompt() {
+    this.userTxt.setText('Tap to connect Pi account');
+    this.userTxt.setColor('#88ccff');
+    this.userBg.setInteractive({ useHandCursor: true })
+      .once('pointerup', () => {
+        this.userTxt.setText('⏳ Connecting to Pi Browser...');
+        this.userTxt.setColor('#aaaaaa');
+        this._tryAutoLogin();
+      });
+  }
 
   async _tryAutoLogin() {
     if (this._authInFlight) return;

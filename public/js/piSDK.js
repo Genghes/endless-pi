@@ -113,7 +113,10 @@ class PiSDKWrapper {
     // Always init right before auth; Pi browser context can be re-created.
     await this._ensurePiInitialized();
 
-    const primaryScopes = ['username', 'payments'];
+    // Keep initial login minimal and user-gesture friendly.
+    // Requesting payments scope here can cause duplicate prompts/failures
+    // in some Pi Browser + app-state combinations.
+    const primaryScopes = ['username'];
 
     // In Pi Browser, Pi.authenticate() resolves within a second or two.
     // In a regular browser it hangs forever → we time out and use demo mode.
@@ -157,35 +160,12 @@ class PiSDKWrapper {
         return this._mockAuth();
       }
 
-      // Some Pi app setups fail generic auth when requesting payments scope up front.
-      // Fallback to username-only to allow login, then payments can be requested later.
-      if (/authentication failed/i.test(msg)) {
-        if (window.__piLog) {
-          window.__piLog('authenticate: primary scopes failed, trying username-only fallback');
-        }
-        try {
-          await this._ensurePiInitialized(true);
-          auth = await Promise.race([
-            window.Pi.authenticate(['username'], (incompletePayment) => {
-              this._resolveIncompletePayment(incompletePayment);
-            }),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('NOT_PI_BROWSER')), 30000)
-            ),
-          ]);
-          if (window.__piLog) window.__piLog('authenticate: username-only fallback succeeded');
-        } catch (fallbackErr) {
-          const fallbackDetails = this._extractErrorDetails(fallbackErr);
-          if (window.__piLog) window.__piLog('authenticate: username fallback ERROR: ' + fallbackDetails);
-          throw new Error(fallbackDetails);
-        }
-      } else {
+      {
       // Real Pi auth error (app not registered, URL mismatch etc.) – rethrow
       // so MenuScene can show a retry button instead of silently going to demo.
       console.error('[PiSDK] Pi.authenticate() error:', piErr);
       if (window.__piLog) window.__piLog('authenticate: ERROR: ' + details);
       throw new Error(details);
-      }
       }
     }
 
