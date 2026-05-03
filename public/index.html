@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Endless π</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #1a1a2e;
+      overflow: hidden;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #game-container {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    canvas { display: block; }
+
+    /* Loading screen shown before Phaser boots */
+    #loading-screen {
+      position: fixed; inset: 0;
+      background: #1a1a2e;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      color: #FFD700; font-family: 'Arial', sans-serif;
+      z-index: 100;
+    }
+    #loading-screen h1 { font-size: 2.5rem; margin-bottom: 1rem; letter-spacing: 4px; }
+    #loading-screen p  { font-size: 1rem; color: #aaa; }
+    #loading-screen.hidden { display: none; }
+
+    /* Pi SDK loads in iframe inside Pi Browser - no extra styles needed */
+  </style>
+</head>
+<body>
+
+  <!-- Loading screen (hidden once Phaser starts) -->
+  <div id="loading-screen">
+    <h1>π RUNNER</h1>
+    <p>Loading...</p>
+  </div>
+
+  <!-- Game canvas container -->
+  <div id="game-container"></div>
+
+  <!-- Pi Network SDK (required for Pi Browser integration) -->
+  <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+  <!-- Initialize SDK. sandbox=true in dev, false in production.
+       Reads from a global set by the module below after Phaser loads. -->
+  <script>
+    // Will be called once piSDK.js module initialises
+    window.__piSandbox = window.location.hostname === 'localhost' ||
+                         window.location.hostname === '127.0.0.1';
+    if (typeof Pi !== 'undefined') {
+      Pi.init({ version: '2.0', sandbox: window.__piSandbox });
+    }
+  </script>
+
+  <!-- Phaser 3 game engine -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+
+  <!-- Game entry point (ES module) -->
+  <script type="module" src="js/main.js"></script>
+
+</body>
+</html>
