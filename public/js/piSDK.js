@@ -50,6 +50,25 @@ class PiSDKWrapper {
     }
   }
 
+  _extractErrorDetails(err) {
+    if (!err) return 'Unknown error';
+    if (typeof err === 'string') return err;
+
+    const parts = [];
+    if (err.message) parts.push(String(err.message));
+    if (err.code) parts.push(`code=${String(err.code)}`);
+    if (err.type) parts.push(`type=${String(err.type)}`);
+    if (err.error) {
+      if (typeof err.error === 'string') parts.push(`error=${err.error}`);
+      else if (err.error.message) parts.push(`error=${err.error.message}`);
+    }
+
+    const keys = Object.keys(err);
+    if (keys.length) parts.push(`keys=${keys.join(',')}`);
+
+    return parts.length ? parts.join(' | ') : this._extractErrorMessage(err);
+  }
+
   async _ensurePiInitialized(force = false) {
     if (typeof window.Pi === 'undefined') {
       this.isDemoMode = true;
@@ -112,6 +131,7 @@ class PiSDKWrapper {
       if (window.__piLog) window.__piLog('authenticate: Pi.authenticate() resolved! user=' + (auth && auth.user && auth.user.username));
     } catch (piErr) {
       const msg = this._extractErrorMessage(piErr);
+      const details = this._extractErrorDetails(piErr);
       if (/not initialized/i.test(msg)) {
         if (window.__piLog) window.__piLog('authenticate: SDK not initialized, re-init and retry once');
         try {
@@ -146,23 +166,25 @@ class PiSDKWrapper {
         try {
           await this._ensurePiInitialized(true);
           auth = await Promise.race([
-            window.Pi.authenticate(['username']),
+            window.Pi.authenticate(['username'], (incompletePayment) => {
+              this._resolveIncompletePayment(incompletePayment);
+            }),
             new Promise((_, reject) =>
               setTimeout(() => reject(new Error('NOT_PI_BROWSER')), 30000)
             ),
           ]);
           if (window.__piLog) window.__piLog('authenticate: username-only fallback succeeded');
         } catch (fallbackErr) {
-          const fallbackMsg = this._extractErrorMessage(fallbackErr);
-          if (window.__piLog) window.__piLog('authenticate: username fallback ERROR: ' + fallbackMsg);
-          throw new Error(fallbackMsg);
+          const fallbackDetails = this._extractErrorDetails(fallbackErr);
+          if (window.__piLog) window.__piLog('authenticate: username fallback ERROR: ' + fallbackDetails);
+          throw new Error(fallbackDetails);
         }
       } else {
       // Real Pi auth error (app not registered, URL mismatch etc.) – rethrow
       // so MenuScene can show a retry button instead of silently going to demo.
       console.error('[PiSDK] Pi.authenticate() error:', piErr);
-      if (window.__piLog) window.__piLog('authenticate: ERROR: ' + msg);
-      throw new Error(msg);
+      if (window.__piLog) window.__piLog('authenticate: ERROR: ' + details);
+      throw new Error(details);
       }
       }
     }
