@@ -12,6 +12,7 @@ import piSDK         from './piSDK.js';
 
 // Initialise Pi SDK before the game starts
 piSDK.init();
+if (window.__piLog) window.__piLog('main.js loaded, piSDK.init() done');
 
 const config = {
   type:   Phaser.AUTO,
@@ -36,9 +37,11 @@ const config = {
 };
 
 const game = new Phaser.Game(config);
+if (window.__piLog) window.__piLog('Phaser.Game() created');
 
 // Hide the HTML loading screen once Phaser starts
 game.events.once('ready', () => {
+  if (window.__piLog) window.__piLog('Phaser ready event fired');
   const loadingEl = document.getElementById('loading-screen');
   if (loadingEl) loadingEl.classList.add('hidden');
 });

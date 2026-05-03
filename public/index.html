@@ -72,14 +72,24 @@
     (function() {
       var el = document.getElementById('pi-debug');
       var q = new URLSearchParams(location.search);
-      if (q.get('debug') === '1') {
-        localStorage.setItem('pi_debug', '1');
-      }
-      if (q.get('debug') === '0') {
-        localStorage.removeItem('pi_debug');
+      var queryDebugOn = q.get('debug') === '1';
+      var queryDebugOff = q.get('debug') === '0';
+      var storedDebug = false;
+
+      // Pi Browser can run inside iframe contexts where localStorage may throw.
+      try {
+        if (queryDebugOn) {
+          localStorage.setItem('pi_debug', '1');
+        }
+        if (queryDebugOff) {
+          localStorage.removeItem('pi_debug');
+        }
+        storedDebug = localStorage.getItem('pi_debug') === '1';
+      } catch (storageErr) {
+        console.warn('[PiDebug] localStorage unavailable:', storageErr.message);
       }
 
-      var show = localStorage.getItem('pi_debug') === '1';
+      var show = queryDebugOn || (!queryDebugOff && storedDebug);
       if (show) {
         el.classList.add('visible');
       }
@@ -91,6 +101,16 @@
           el.innerHTML += t + ' ' + msg + '<br>';
         }
       };
+
+      window.addEventListener('error', function(e) {
+        var msg = 'window.onerror: ' + (e.message || 'unknown') + ' @ ' + (e.filename || 'n/a') + ':' + (e.lineno || 0);
+        window.__piLog(msg);
+      });
+
+      window.addEventListener('unhandledrejection', function(e) {
+        var reason = e.reason && e.reason.message ? e.reason.message : String(e.reason);
+        window.__piLog('unhandledrejection: ' + reason);
+      });
     })();
 
     window.__piLog('Pi SDK loaded: ' + (typeof Pi !== 'undefined'));
