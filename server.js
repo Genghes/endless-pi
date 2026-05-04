@@ -98,6 +98,13 @@ app.get('/.well-known/pi-domain-verification', (req, res) => {
 });
 
 // Serve game for all other routes (SPA)
+
+// Serve pi-demo-app index.html for all /pi-demo-app/* routes (SPA support)
+app.get('/pi-demo-app/*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'pi-demo-app', 'index.html'));
+});
+
+// Serve game for all other routes (SPA)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
